@@ -146,21 +146,24 @@ TEST_R2 = 0.9721
 N_TRANSACTIONS = 47_864
 N_TEST = 9_573
 
-
 def month_label(m):
     """Turn months-since-Jan-2017 into a label a person can read."""
     return f"{MONTH_NAMES[m % 12]} {2017 + m // 12}"
 
-
 MONTH_OPTIONS = [month_label(m) for m in range(MAX_MONTH + 1)]
 MONTH_LOOKUP = {label: m for m, label in enumerate(MONTH_OPTIONS)}
-
 
 # ===================================================================
 # STYLING
 # ===================================================================
-# One typeface, one accent colour, thin rules instead of shadows. Colours are
-# defined once as CSS variables so no stray hex appears further down.
+# One typeface, one accent colour, thin rules instead of shadows.
+#
+# The app is pinned to a light appearance for everyone, rather than following
+# the viewer's dark preference or Streamlit's theme menu. Two reasons: a
+# valuation tool should read like a printed document, and a fixed appearance
+# keeps the screenshots in the report consistent with what a marker sees.
+# Pinning it also removes the whole class of bug where Streamlit's own theme
+# and the browser's prefers-color-scheme disagree with each other.
 st.markdown(
     """
     <style>
@@ -173,6 +176,115 @@ st.markdown(
           --ink-muted: #64748B;
           --rule:      #E2E8F0;
           --well:      #F8FAFC;
+      }
+
+      /* ---- Pin the light appearance --------------------------------------
+         color-scheme tells the browser to render scrollbars and native
+         controls light. The rest repaints Streamlit's own surfaces, which are
+         the only things that would otherwise go dark. */
+      :root, .stApp { color-scheme: light !important; }
+
+      .stApp, [data-testid="stHeader"], [data-testid="stMain"],
+      [data-testid="stBottomBlockContainer"] {
+          background: #FFFFFF !important;
+          color: var(--ink) !important;
+      }
+      [data-testid="stSidebar"],
+      [data-testid="stSidebarContent"] {
+          background: #F4F6F9 !important;
+          color: var(--ink) !important;
+      }
+      /* Text everywhere: Streamlit sets near-white in dark mode, which would
+         be invisible on the white page above. */
+      .stApp p, .stApp li, .stApp label, .stApp span, .stApp h1, .stApp h2,
+      .stApp h3, .stApp h4, .stApp td, .stApp th,
+      [data-testid="stSidebar"] p, [data-testid="stSidebar"] li,
+      [data-testid="stSidebar"] span, [data-testid="stSidebar"] h1,
+      [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+          color: var(--ink) !important;
+      }
+      /* Input surfaces and the dropdown list, which is a separate portal. */
+      [data-testid="stSelectbox"] div:not([data-testid="stWidgetLabel"] *),
+      [data-testid="stSelectbox"] input,
+      [data-testid="stNumberInput"] div:not([data-testid="stWidgetLabel"] *),
+      [data-testid="stNumberInput"] input,
+      [data-testid="stNumberInput"] button,
+      [data-testid="stSelectboxVirtualDropdown"],
+      [data-testid="stSelectboxVirtualDropdown"] li,
+      [data-testid="stExpander"], [data-testid="stExpander"] details,
+      [data-testid="stExpander"] summary,
+      [data-testid="stExpander"] summary *,
+      [data-testid="stExpanderDetails"] {
+          background-color: var(--well) !important;
+          color: var(--ink) !important;
+      }
+      [data-testid="stExpander"] details { border-color: #CBD5E1 !important; }
+      [data-testid="stSelectboxVirtualDropdown"] li:hover {
+          background-color: #E8ECF2 !important;
+      }
+      /* Metric cards. */
+      [data-testid="stMetric"] {
+          background-color: #FFFFFF !important;
+          color: var(--ink) !important;
+          border-color: #CBD5E1 !important;
+      }
+
+      /* Tables (see show_table). Plain HTML, so they can actually be styled to
+         match the page - which st.dataframe cannot, being canvas-drawn. */
+      .wtable {
+          width: 100%; border-collapse: collapse; margin: .2rem 0 .1rem 0;
+          font-size: .93rem; background: #FFFFFF;
+          border: 1px solid #CBD5E1; border-radius: 4px;
+      }
+      .wtable thead th {
+          text-align: left; font-weight: 600; color: #334155;
+          background: #F1F5F9; padding: .6rem .85rem;
+          border-bottom: 1px solid #CBD5E1; white-space: nowrap;
+      }
+      .wtable tbody td {
+          padding: .55rem .85rem; color: var(--ink);
+          border-bottom: 1px solid #E8ECF2;
+      }
+      .wtable tbody tr:last-child td { border-bottom: none; }
+      .wtable tbody tr:nth-child(even) td { background: #FBFCFE; }
+      /* Money columns right-aligned on tabular figures so they line up. */
+      .wtable thead th:not(:first-child),
+      .wtable tbody td:not(:first-child) {
+          text-align: right;
+          font-variant-numeric: tabular-nums;
+          font-feature-settings: "tnum";
+      }
+
+      /* The secondary button (Reset) keeps Streamlit's dark-theme fill, which
+         is black on the light page. Give it a normal outlined-button look. */
+      [data-testid^="stBaseButton-secondary"] {
+          background: #FFFFFF !important;
+          color: var(--ink) !important;
+          border: 1px solid #CBD5E1 !important;
+      }
+      [data-testid^="stBaseButton-secondary"]:hover {
+          background: var(--well) !important;
+          border-color: var(--blue) !important;
+          color: var(--blue) !important;
+      }
+      [data-testid^="stBaseButton-secondary"] svg {
+          fill: currentColor !important; color: inherit !important;
+      }
+      /* Icons: the dropdown chevrons and the "?" tooltip targets are SVGs that
+         inherit Streamlit's near-white dark-theme colour, so they disappear
+         against the light surfaces above. */
+      [data-testid="stSelectbox"] svg, [data-testid="stNumberInput"] svg,
+      [data-testid="stTooltipHoverTarget"] svg, [data-testid="stExpander"] svg,
+      [data-testid="stSidebar"] svg, [data-testid="stMetric"] svg {
+          fill: var(--ink-muted) !important;
+          color: var(--ink-muted) !important;
+      }
+      /* The "?" icons inside a slider sit within the hue-rotate above, and
+         --ink-muted is a blue-grey, so it would rotate to olive. A true neutral
+         grey has no hue to rotate. */
+      [data-testid="stSlider"] svg {
+          fill: #737373 !important;
+          color: #737373 !important;
       }
 
       html, body, .stApp, [data-testid="stSidebar"] {
@@ -297,34 +409,6 @@ st.markdown(
          system setting, so the custom surfaces need a dark variant. Streamlit's
          own dark background is near-black; replace it with a dark slate grey,
          with the sidebar and cards one step lighter so the layers read. */
-      @media (prefers-color-scheme: dark) {
-          :root {
-              --ink: #E8EDF5; --ink-muted: #94A3B8;
-              --rule: #303845; --well: #1D242E;
-              --navy: #5B8DD6; --blue: #4D8DF0;
-          }
-          .stApp, [data-testid="stHeader"] { background: #171C24; }
-          [data-testid="stSidebar"] { background: #1E252F; }
-          .result { background: #1E2530; }
-
-          /* Streamlit's dark field surface is blue-tinted, which does not sit
-             well against the slate page. Paint every part of these controls a
-             flat neutral grey instead - divs, the inner search input and the
-             number field's +/- buttons - so a focused field and an idle one
-             are the same colour. The dropdown list is a separate portal, so it
-             is matched by name below. */
-          [data-testid="stSelectbox"] div:not([data-testid="stWidgetLabel"] *),
-          [data-testid="stSelectbox"] input,
-          [data-testid="stNumberInput"] div:not([data-testid="stWidgetLabel"] *),
-          [data-testid="stNumberInput"] input,
-          [data-testid="stNumberInput"] button {
-              background-color: #262626 !important;
-          }
-          [data-testid="stSelectboxVirtualDropdown"],
-          [data-testid="stSelectboxVirtualDropdown"] li {
-              background-color: #262626 !important;
-          }
-      }
 
       @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after {
@@ -337,6 +421,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+def show_table(frame):
+    """Render a DataFrame as a plain HTML table.
+
+    st.dataframe draws to a canvas and takes its colours from Streamlit's own
+    theme in JavaScript, so CSS cannot reach it - it stays dark whatever the
+    page around it looks like. These tables are small and static, so nothing is
+    lost by dropping the interactive grid for something that can be styled.
+    """
+    st.markdown(
+        frame.to_html(index=False, escape=False, border=0, classes="wtable"),
+        unsafe_allow_html=True,
+    )
+
 
 def step(number, title):
     """Numbered section marker, in place of a plain heading."""
@@ -345,7 +442,6 @@ def step(number, title):
         f'<span class="t">{title}</span></div>',
         unsafe_allow_html=True,
     )
-
 
 # ===================================================================
 # LOAD MODEL
@@ -374,7 +470,6 @@ def load_model():
             "one that saved it - check `requirements.txt` pins scikit-learn==1.8.0."
         )
 
-
 model, model_columns, load_error = load_model()
 
 if load_error:
@@ -382,11 +477,9 @@ if load_error:
     st.error(load_error, icon=":material/error:")
     st.stop()
 
-
 def known_categories(prefix):
     """Recover valid categories from the model's one-hot column names."""
     return {c[len(prefix):] for c in model_columns if c.startswith(prefix)}
-
 
 # Only ever offer a category the model was trained on. If the notebook is re-run
 # with different data, the app narrows its options instead of sending the model
@@ -395,7 +488,6 @@ KNOWN_TOWNS = known_categories("town_")
 KNOWN_STREETS = known_categories("street_name_")
 KNOWN_TYPES = known_categories("flat_type_")
 KNOWN_MODELS = known_categories("flat_model_")
-
 
 # ===================================================================
 # SIDEBAR
@@ -430,7 +522,6 @@ with st.sidebar:
         "still required for an actual transaction."
     )
     st.caption("Data source: data.gov.sg — HDB Resale Flat Prices.")
-
 
 # ===================================================================
 # HEADER
@@ -578,7 +669,6 @@ most common value for that kind of flat.
         """
     )
 
-
 # ===================================================================
 # INPUT VALIDATION
 # ===================================================================
@@ -627,9 +717,7 @@ def validate():
 
     return errors, warnings
 
-
 errors, warnings = validate()
-
 
 # ===================================================================
 # PREDICTION
@@ -649,7 +737,6 @@ def base_row(**overrides):
     row.update(overrides)
     return row
 
-
 def predict(rows):
     """Turn raw form values into the 97 columns the model expects, and predict.
 
@@ -663,7 +750,6 @@ def predict(rows):
     # reindex adds every column these flats do not have as 0, in the right order.
     frame = pd.get_dummies(frame).reindex(columns=model_columns, fill_value=0)
     return model.predict(frame)
-
 
 st.write("")
 button_col, reset_col = st.columns([3, 1])
@@ -703,9 +789,11 @@ elif st.session_state.get("show_estimate"):
             """,
             unsafe_allow_html=True,
         )
+        # Streamlit reads $...$ as LaTeX maths, so two dollar amounts in one
+        # string would swallow the text between them. Escaped with a backslash.
         st.caption(
-            f"The single best guess is ${price:,.0f}. The range is the model's "
-            f"typical error of plus or minus ${TEST_MAE:,} on flats it had never "
+            f"The single best guess is \\${price:,.0f}. The range is the model's "
+            f"typical error of plus or minus \\${TEST_MAE:,} on flats it had never "
             "seen before — treat it as the sensible negotiating window rather "
             "than a guarantee."
         )
@@ -770,14 +858,11 @@ elif st.session_state.get("show_estimate"):
 
         # One batched call rather than one per scenario.
         alt_prices = predict([base_row(**changes) for _, changes in scenarios])
-        st.dataframe(
-            pd.DataFrame({
-                "If the flat were…": [label for label, _ in scenarios],
-                "Estimated price": [f"${p:,.0f}" for p in alt_prices],
-                "Difference": [f"{p - price:+,.0f}" for p in alt_prices],
-            }),
-            hide_index=True, width="stretch",
-        )
+        show_table(pd.DataFrame({
+            "If the flat were…": [label for label, _ in scenarios],
+            "Estimated price": [f"${p:,.0f}" for p in alt_prices],
+            "Difference": [f"{p - price:+,.0f}" for p in alt_prices],
+        }))
         st.caption(
             "Keep the flat exactly as entered, change only the one thing in a "
             "row, and the price moves by the amount shown. Floor area and sale "
@@ -787,19 +872,16 @@ elif st.session_state.get("show_estimate"):
 
         # ---------------------------------------------------------- details
         with st.expander("The details you entered", icon=":material/list_alt:"):
-            st.dataframe(
-                pd.DataFrame({
-                    "Detail": ["Town", "Street", "Flat type", "Flat model",
-                               "Floor area", "Space per room", "Storey",
-                               "Remaining lease", "Sale month"],
-                    "Value": [town.title(), street_name.title(), flat_type,
-                              flat_model, f"{floor_area_sqm:.0f} sqm",
-                              f"{floor_area_sqm / ROOMS[flat_type]:.1f} sqm",
-                              f"Floor {int(floor)} (band {storey_band})",
-                              f"{remaining_lease_years:.1f} years", sale_label],
-                }),
-                hide_index=True, width="stretch",
-            )
+            show_table(pd.DataFrame({
+                "Detail": ["Town", "Street", "Flat type", "Flat model",
+                           "Floor area", "Space per room", "Storey",
+                           "Remaining lease", "Sale month"],
+                "Value": [town.title(), street_name.title(), flat_type,
+                          flat_model, f"{floor_area_sqm:.0f} sqm",
+                          f"{floor_area_sqm / ROOMS[flat_type]:.1f} sqm",
+                          f"Floor {int(floor)} (band {storey_band})",
+                          f"{remaining_lease_years:.1f} years", sale_label],
+            }))
 
         with st.expander("What this estimate assumes, and when to distrust it",
                          icon=":material/warning:"):
