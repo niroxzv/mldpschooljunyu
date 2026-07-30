@@ -257,7 +257,10 @@ st.markdown(
       /* The dropdowns are type-to-search boxes, so clicking one places a text
          cursor. Typing still filters the list; the blinking caret is just
          hidden because it reads as a glitch on a dropdown. */
-      [data-testid="stSelectbox"] input { caret-color: transparent; }
+      [data-testid="stSelectbox"] input,
+      div[data-baseweb="select"] input {
+          caret-color: transparent !important;
+      }
 
       /* Keyboard focus must stay visible - never remove the ring. */
       *:focus-visible {
@@ -278,6 +281,17 @@ st.markdown(
           .stApp, [data-testid="stHeader"] { background: #171C24; }
           [data-testid="stSidebar"] { background: #1E252F; }
           .result { background: #1E2530; }
+
+          /* The dropdowns and number field sit inside the hue-rotate filter,
+             and Streamlit's dark field surface is blue-tinted - the rotation
+             drags that tint to olive. Pure grey has zero saturation, so the
+             rotation passes it through unchanged and the fields stay neutral. */
+          [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+          [data-testid="stNumberInput"] div[data-baseweb="input"],
+          [data-testid="stNumberInput"] input,
+          [data-testid="stNumberInput"] button {
+              background-color: #262626 !important;
+          }
       }
 
       @media (prefers-reduced-motion: reduce) {
