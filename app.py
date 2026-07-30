@@ -13,11 +13,8 @@ The app never reads the CSV. It only needs the two artefacts the notebook saves
 Any figure quoted in the interface is therefore hard-coded below and labelled
 with where it came from.
 
-Every input is pre-filled with the most common value for that kind of flat, so
-the form can be submitted immediately, and inputs are validated against what
-the training data actually contains before a prediction is shown. The result
-is explained with numbers ("three floors higher: +$5,019") because those are
-directly actionable for a buyer or seller.
+Inputs are validated against what the training data actually contains before a
+prediction is shown.
 """
 import joblib
 import pandas as pd
@@ -34,11 +31,9 @@ st.set_page_config(
 # ===================================================================
 # REFERENCE DATA
 # ===================================================================
-# Measured from the same 47,864 transactions the model was trained on (Punggol /
-# Sengkang / Hougang, Jan 2017 - Jul 2026). These let the app offer only
-# combinations the model has actually seen, warn when an input falls outside
-# that experience, and pre-fill typical values so someone who does not know
-# their flat's details still gets a sensible answer.
+# Measured from the same 47,864 transactions the model was trained on. Used to
+# offer only combinations the model has seen, warn on inputs outside that range,
+# and pre-fill sensible defaults.
 
 # A street belongs to exactly one town, so the street list is filtered by town.
 TOWN_STREETS = {
@@ -156,14 +151,8 @@ MONTH_LOOKUP = {label: m for m, label in enumerate(MONTH_OPTIONS)}
 # ===================================================================
 # STYLING
 # ===================================================================
-# One typeface, one accent colour, thin rules instead of shadows.
-#
-# The app is pinned to a light appearance for everyone, rather than following
-# the viewer's dark preference or Streamlit's theme menu. Two reasons: a
-# valuation tool should read like a printed document, and a fixed appearance
-# keeps the screenshots in the report consistent with what a marker sees.
-# Pinning it also removes the whole class of bug where Streamlit's own theme
-# and the browser's prefers-color-scheme disagree with each other.
+# The app is pinned to a light appearance so it looks the same regardless of the
+# viewer's dark-mode preference or Streamlit's theme menu.
 st.markdown(
     """
     <style>
@@ -178,10 +167,8 @@ st.markdown(
           --well:      #F8FAFC;
       }
 
-      /* ---- Pin the light appearance --------------------------------------
-         color-scheme tells the browser to render scrollbars and native
-         controls light. The rest repaints Streamlit's own surfaces, which are
-         the only things that would otherwise go dark. */
+      /* Pin the light appearance. Streamlit's own surfaces are repainted
+         below; without this they follow the viewer's dark preference. */
       :root, .stApp { color-scheme: light !important; }
 
       .stApp, [data-testid="stHeader"], [data-testid="stMain"],
@@ -194,8 +181,7 @@ st.markdown(
           background: #F4F6F9 !important;
           color: var(--ink) !important;
       }
-      /* Text everywhere: Streamlit sets near-white in dark mode, which would
-         be invisible on the white page above. */
+      /* Streamlit sets near-white text in dark mode - invisible on white. */
       .stApp p, .stApp li, .stApp label, .stApp span, .stApp h1, .stApp h2,
       .stApp h3, .stApp h4, .stApp td, .stApp th,
       [data-testid="stSidebar"] p, [data-testid="stSidebar"] li,
@@ -229,8 +215,7 @@ st.markdown(
           border-color: #CBD5E1 !important;
       }
 
-      /* Tables (see show_table). Plain HTML, so they can actually be styled to
-         match the page - which st.dataframe cannot, being canvas-drawn. */
+      /* Tables (see show_table). */
       .wtable {
           width: 100%; border-collapse: collapse; margin: .2rem 0 .1rem 0;
           font-size: .93rem; background: #FFFFFF;
@@ -255,8 +240,7 @@ st.markdown(
           font-feature-settings: "tnum";
       }
 
-      /* The secondary button (Reset) keeps Streamlit's dark-theme fill, which
-         is black on the light page. Give it a normal outlined-button look. */
+      /* Reset button - Streamlit's secondary style is black in dark mode. */
       [data-testid^="stBaseButton-secondary"] {
           background: #FFFFFF !important;
           color: var(--ink) !important;
@@ -270,18 +254,16 @@ st.markdown(
       [data-testid^="stBaseButton-secondary"] svg {
           fill: currentColor !important; color: inherit !important;
       }
-      /* Icons: the dropdown chevrons and the "?" tooltip targets are SVGs that
-         inherit Streamlit's near-white dark-theme colour, so they disappear
-         against the light surfaces above. */
+      /* Chevrons and "?" icons are SVGs inheriting Streamlit's near-white
+         dark-theme colour, so they vanish on the light surfaces. */
       [data-testid="stSelectbox"] svg, [data-testid="stNumberInput"] svg,
       [data-testid="stTooltipHoverTarget"] svg, [data-testid="stExpander"] svg,
       [data-testid="stSidebar"] svg, [data-testid="stMetric"] svg {
           fill: var(--ink-muted) !important;
           color: var(--ink-muted) !important;
       }
-      /* The "?" icons inside a slider sit within the hue-rotate above, and
-         --ink-muted is a blue-grey, so it would rotate to olive. A true neutral
-         grey has no hue to rotate. */
+      /* A blue-grey would rotate to olive inside the hue-rotate above.
+         A true neutral grey has no hue to rotate. */
       [data-testid="stSlider"] svg {
           fill: #737373 !important;
           color: #737373 !important;
@@ -298,8 +280,7 @@ st.markdown(
           font-feature-settings: "tnum";
       }
 
-      /* Numbered step marker + rule above each section. The number carries the
-         sequence so the heading does not have to. */
+      /* Numbered step marker with a rule above each section. */
       .step {
           display: flex; align-items: baseline; gap: .7rem;
           margin: 2.1rem 0 1rem 0; padding-top: 1.1rem;
@@ -315,8 +296,7 @@ st.markdown(
           letter-spacing: -.01em;
       }
 
-      /* The headline result. A navy rule on the left rather than a coloured
-         fill, so the number itself is the loudest thing on the page. */
+      /* The headline result. */
       .result {
           border: 1px solid var(--rule);
           border-left: 3px solid var(--navy);
@@ -347,10 +327,9 @@ st.markdown(
 
       [data-testid="stMetricValue"] { font-size: 1.28rem; font-weight: 600; }
 
-      /* Streamlit's accent defaults to red (#FF4B4B). Buttons can be set
-         directly; sliders, dropdowns and number fields draw their accent
-         inline with no selector to hook, so their red is hue-rotated to blue
-         instead. Greys have no saturation, so the rotation leaves them alone. */
+      /* Streamlit's accent is red (#FF4B4B). Buttons take a colour directly;
+         the slider paints its track inline with no selector to hook, so its
+         red is hue-rotated to blue. Greys are unsaturated and unaffected. */
       [data-testid^="stBaseButton-primary"] {
           background: var(--blue) !important;
           border-color: var(--blue) !important;
@@ -364,18 +343,15 @@ st.markdown(
           filter: hue-rotate(218deg) saturate(1.05);
       }
 
-      /* Dropdowns and the number field are NOT filtered - the filter would
-         drag their tinted surface towards olive. Instead their red focus
-         border is overridden directly: :focus-within hits whichever inner div
-         carries the border without depending on Streamlit's DOM structure. */
+      /* Dropdowns are not hue-rotated - that would tint their surface too.
+         :focus-within finds whichever inner div carries the focus border. */
       [data-testid="stSelectbox"] div:focus-within,
       [data-testid="stNumberInput"] div:focus-within {
           border-color: var(--blue) !important;
       }
 
-      /* The dropdowns are type-to-search boxes, so clicking one places a text
-         cursor. Typing still filters the list; the blinking caret is just
-         hidden because it reads as a glitch on a dropdown. */
+      /* Dropdowns are type-to-search, so clicking one places a text cursor.
+         Typing still filters; only the blinking caret is hidden. */
       [data-testid="stSelectbox"],
       [data-testid="stSelectbox"] * {
           caret-color: transparent !important;
@@ -387,11 +363,9 @@ st.markdown(
           outline-offset: 2px !important;
       }
 
-      /* ...except the search input inside a dropdown or number field. Those
-         inputs are sized to their text, so any ring draws a box around the
-         words rather than around the control. The field already shows focus
-         with its own border (above), so nothing is lost. All three ways a
-         browser can draw that box are cleared, in every focus state. */
+      /* ...except a dropdown's inner search input, which is sized to its text,
+         so a ring would box the words rather than the control. The field
+         already shows focus with its own border. */
       [data-testid="stSelectbox"] input,
       [data-testid="stSelectbox"] input:focus,
       [data-testid="stSelectbox"] input:focus-visible,
@@ -404,11 +378,6 @@ st.markdown(
           border: none !important;
           box-shadow: none !important;
       }
-
-      /* With no config file pinning the theme, the app follows the viewer's
-         system setting, so the custom surfaces need a dark variant. Streamlit's
-         own dark background is near-black; replace it with a dark slate grey,
-         with the sidebar and cards one step lighter so the layers read. */
 
       @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after {
@@ -424,10 +393,9 @@ st.markdown(
 def show_table(frame):
     """Render a DataFrame as a plain HTML table.
 
-    st.dataframe draws to a canvas and takes its colours from Streamlit's own
-    theme in JavaScript, so CSS cannot reach it - it stays dark whatever the
-    page around it looks like. These tables are small and static, so nothing is
-    lost by dropping the interactive grid for something that can be styled.
+    st.dataframe draws to a canvas and takes its colours from Streamlit's theme
+    in JavaScript, so CSS cannot restyle it. These tables are small and static,
+    so nothing is lost by using plain HTML instead.
     """
     st.markdown(
         frame.to_html(index=False, escape=False, border=0, classes="wtable"),
@@ -607,10 +575,8 @@ step(3, "Which unit, and when?")
 unit_left, unit_right = st.columns(2)
 
 with unit_left:
-    # Ask for the actual floor, which is what a person knows, then convert to
-    # the band midpoint the model was trained on. HDB only publishes a 3-floor
-    # band for privacy, so every flat in a band shares one value - the caption
-    # below says so outright rather than leaving the user to notice it.
+    # Ask for the actual floor, then convert to the band midpoint the model was
+    # trained on. HDB only publishes a 3-floor band, so all three share a value.
     floor = st.number_input(
         "Which floor?", min_value=1, max_value=27, value=11, step=1,
         help="The actual floor the flat is on.",
@@ -819,8 +785,7 @@ elif st.session_state.get("show_estimate"):
             st.write(f"This flat is **{verdict}**")
 
         # ---------------------------------------------------------- what-ifs
-        # Answered with numbers rather than charts. A row like "three floors
-        # higher: +$6,300" needs no axis-reading and is directly actionable.
+        # Answered with numbers rather than charts - directly actionable.
         step(4, "What is driving this price?")
         st.write(
             "Each row re-asks the model the same question with **one** detail "
