@@ -254,6 +254,11 @@ st.markdown(
           filter: hue-rotate(218deg) saturate(1.05);
       }
 
+      /* The dropdowns are type-to-search boxes, so clicking one places a text
+         cursor. Typing still filters the list; the blinking caret is just
+         hidden because it reads as a glitch on a dropdown. */
+      [data-testid="stSelectbox"] input { caret-color: transparent; }
+
       /* Keyboard focus must stay visible - never remove the ring. */
       *:focus-visible {
           outline: 2px solid var(--blue) !important;
@@ -261,15 +266,18 @@ st.markdown(
       }
 
       /* With no config file pinning the theme, the app follows the viewer's
-         system setting, so the custom surfaces need a dark variant. Steps are
-         chosen against the dark background rather than mechanically inverted. */
+         system setting, so the custom surfaces need a dark variant. Streamlit's
+         own dark background is near-black; replace it with a dark slate grey,
+         with the sidebar and cards one step lighter so the layers read. */
       @media (prefers-color-scheme: dark) {
           :root {
               --ink: #E8EDF5; --ink-muted: #94A3B8;
-              --rule: #2A3648; --well: #161C27;
+              --rule: #303845; --well: #1D242E;
               --navy: #5B8DD6; --blue: #4D8DF0;
           }
-          .result { background: #131A25; }
+          .stApp, [data-testid="stHeader"] { background: #171C24; }
+          [data-testid="stSidebar"] { background: #1E252F; }
+          .result { background: #1E2530; }
       }
 
       @media (prefers-reduced-motion: reduce) {
