@@ -14,6 +14,15 @@ with where it came from.
 
 The charts are not stored data - they are produced by asking the model itself
 what it would predict as one input is varied and everything else is held fixed.
+
+Visual design
+-------------
+Swiss / minimalist: a strict grid, one accent colour, generous whitespace and no
+decoration that does not carry information. Icons are Material Symbols (via
+Streamlit's ":material/name:" syntax) rather than emoji, so they inherit the
+theme instead of rendering as a different picture on every operating system.
+Money is set in tabular figures so digits line up and the layout does not jitter
+as values change. Theme colours live in .streamlit/config.toml.
 """
 
 import altair as alt          # ships with Streamlit; no extra requirement
@@ -24,7 +33,7 @@ import streamlit as st
 # ---------------------------------------------------------------- page config
 st.set_page_config(
     page_title="HDB Resale Price Estimator",
-    page_icon="🏠",
+    page_icon=":material/apartment:",
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -136,11 +145,16 @@ TEST_R2 = 0.9721
 N_TRANSACTIONS = 47_864
 N_TEST = 9_573
 
-# Chart colours. Validated as a categorical pair in BOTH light and dark mode
-# (CVD deltaE 26.8 against a target of 8), so one palette works whichever theme
-# the viewer's browser is set to.
-SERIES = "#3987e5"       # the model's response curve
-HIGHLIGHT = "#d95926"    # the flat the user actually entered
+# Chart colours, drawn from the same navy/bronze palette as the theme. This pair
+# was checked with a palette validator and passes all six checks - lightness
+# band, chroma floor, colour-blind separation, normal-vision separation and
+# contrast against the surface - in BOTH light and dark mode.
+SERIES = "#2563EB"       # the model's response curve
+HIGHLIGHT = "#B45309"    # the flat the user actually entered
+INK = "#0F172A"
+INK_MUTED = "#64748B"
+GRID = "#E2E8F0"
+CHART_FONT = "IBM Plex Sans, Segoe UI, system-ui, sans-serif"
 
 
 def month_label(m):
@@ -155,37 +169,140 @@ MONTH_LOOKUP = {label: m for m, label in enumerate(MONTH_OPTIONS)}
 # ===================================================================
 # STYLING
 # ===================================================================
-# Colours are given as rgba over the theme's own background, so the app stays
-# readable whether the viewer is in Streamlit's light or dark theme.
+# Swiss / minimalist treatment: one typeface, one accent, thin rules instead of
+# heavy shadows, and tabular figures so money columns stay aligned. Values are
+# defined once as custom properties so nothing is a stray hex further down.
 st.markdown(
     """
     <style>
-      .price-card {
-          border: 1px solid rgba(128,128,128,.28);
-          border-radius: 14px;
-          padding: 1.5rem 1.25rem;
-          text-align: center;
-          background: rgba(128,128,128,.06);
+      @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+      :root {
+          --navy:      #0F172A;
+          --navy-soft: #1E3A5F;
+          --accent:    #B45309;
+          --ink:       #0F172A;
+          --ink-muted: #64748B;
+          --rule:      #E2E8F0;
+          --well:      #F8FAFC;
       }
-      .price-card .label {
-          font-size: .8rem; letter-spacing: .09em; text-transform: uppercase;
-          opacity: .65;
+
+      html, body, .stApp, [data-testid="stSidebar"] {
+          font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
       }
-      .price-card .value {
-          font-size: 2.9rem; font-weight: 700; line-height: 1.15;
-          margin: .35rem 0 .1rem 0;
+
+      /* Money must use tabular figures, or digits shift width as values change. */
+      .tnum, .result .amount, [data-testid="stMetricValue"],
+      [data-testid="stMetricDelta"] {
+          font-variant-numeric: tabular-nums;
+          font-feature-settings: "tnum";
       }
-      .price-card .range { font-size: .95rem; opacity: .75; }
-      .placeholder {
-          border: 1px dashed rgba(128,128,128,.4);
-          border-radius: 14px; padding: 2.1rem 1.25rem;
-          text-align: center; opacity: .7;
+
+      /* Small uppercase eyebrow above each section, in place of a numbered
+         heading. Carries the step number without shouting it. */
+      .eyebrow {
+          font-size: .7rem; font-weight: 600; letter-spacing: .14em;
+          text-transform: uppercase; color: var(--ink-muted);
+          margin: 1.9rem 0 .3rem 0;
       }
-      div[data-testid="stMetricValue"] { font-size: 1.35rem; }
+      .eyebrow:first-of-type { margin-top: .9rem; }
+      .section-title {
+          font-size: 1.14rem; font-weight: 600; color: var(--ink);
+          margin: 0 0 .85rem 0; letter-spacing: -.01em;
+      }
+
+      /* The headline result. A navy rule on the left instead of a coloured
+         fill, so the number itself is the loudest thing on the page. */
+      .result {
+          border: 1px solid var(--rule);
+          border-left: 3px solid var(--navy-soft);
+          border-radius: 4px;
+          padding: 1.6rem 1.5rem;
+          background: #fff;
+      }
+      .result .caption {
+          font-size: .7rem; font-weight: 600; letter-spacing: .14em;
+          text-transform: uppercase; color: var(--ink-muted);
+      }
+      .result .amount {
+          font-size: 2.85rem; font-weight: 700; color: var(--ink);
+          line-height: 1.1; margin: .4rem 0 .35rem 0; letter-spacing: -.02em;
+      }
+      .result .band {
+          font-size: .92rem; color: var(--ink-muted);
+          padding-top: .55rem; border-top: 1px solid var(--rule);
+      }
+      .result .band b { color: var(--ink); font-weight: 600; }
+
+      /* Empty state, before anything has been estimated. */
+      .awaiting {
+          border: 1px dashed var(--rule); border-radius: 4px;
+          padding: 2.3rem 1.5rem; text-align: center;
+          color: var(--ink-muted); font-size: .95rem; background: var(--well);
+      }
+
+      [data-testid="stMetricValue"] { font-size: 1.3rem; font-weight: 600; }
+
+      /* Streamlit's own primary button is red by default. Recolour it to the
+         navy accent here rather than in a .streamlit/config.toml, so the whole
+         app stays in this single file. */
+      [data-testid^="stBaseButton-primary"] {
+          background: var(--navy-soft) !important;
+          border-color: var(--navy-soft) !important;
+          color: #fff !important;
+      }
+      [data-testid^="stBaseButton-primary"]:hover {
+          background: var(--navy) !important;
+          border-color: var(--navy) !important;
+      }
+
+      /* Keyboard focus must stay visible - never remove the ring. */
+      *:focus-visible {
+          outline: 2px solid var(--navy-soft) !important;
+          outline-offset: 2px !important;
+      }
+
+      /* Without a pinned theme the app follows the viewer's system setting, so
+         the custom surfaces need a dark variant too. Steps are chosen for the
+         dark background rather than mechanically inverted, and the chart colours
+         were validated against both surfaces. */
+      @media (prefers-color-scheme: dark) {
+          :root {
+              --ink:       #E8EDF5;
+              --ink-muted: #94A3B8;
+              --rule:      #2A3648;
+              --well:      #161C27;
+              --navy-soft: #5B8DD6;
+          }
+          .result { background: #131A25; }
+          [data-testid^="stBaseButton-primary"] {
+              background: #2D5A94 !important; border-color: #2D5A94 !important;
+          }
+          [data-testid^="stBaseButton-primary"]:hover {
+              background: #3A6FB0 !important; border-color: #3A6FB0 !important;
+          }
+      }
+
+      /* Honour a reduced-motion preference. */
+      @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after {
+              animation-duration: .001ms !important;
+              transition-duration: .001ms !important;
+          }
+      }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+def eyebrow(step, title):
+    """Small uppercase step label followed by a section heading."""
+    st.markdown(
+        f'<div class="eyebrow">Step {step}</div>'
+        f'<div class="section-title">{title}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ===================================================================
@@ -219,8 +336,8 @@ def load_model():
 model, model_columns, load_error = load_model()
 
 if load_error:
-    st.title("🏠 HDB Resale Price Estimator")
-    st.error(load_error, icon="🚫")
+    st.title("HDB Resale Price Estimator", anchor=False)
+    st.error(load_error, icon=":material/error:")
     st.stop()
 
 
@@ -242,28 +359,28 @@ KNOWN_MODELS = known_categories("flat_model_")
 # SIDEBAR
 # ===================================================================
 with st.sidebar:
-    st.header("About this estimator")
+    st.subheader("About this estimator", anchor=False)
     st.write(
         "Prices are predicted by a **Gradient Boosting** model trained on every "
         "HDB resale transaction in Punggol, Sengkang and Hougang since 2017 "
         f"({N_TRANSACTIONS:,} sales)."
     )
 
-    st.subheader("How accurate is it?")
+    st.markdown('<div class="eyebrow">Accuracy</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     c1.metric("Typical error", f"${TEST_MAE:,}", help=(
         f"Mean absolute error on {N_TEST:,} held-out sales the model never saw "
         "while training. Roughly half of all estimates land closer than this."
-    ))
-    c2.metric("R²", f"{TEST_R2:.3f}", help=(
+    ), border=True)
+    c2.metric("R squared", f"{TEST_R2:.3f}", help=(
         "The share of the price variation between flats that the model explains."
-    ))
+    ), border=True)
     st.caption(
         f"${TEST_MAE:,} is about 3.4% of a typical $520,000 flat — close enough "
         "to anchor an asking price or judge whether a listing is fair."
     )
 
-    st.subheader("Good to know")
+    st.markdown('<div class="eyebrow">Scope</div>', unsafe_allow_html=True)
     st.markdown(
         "- Covers **Punggol, Sengkang and Hougang** only.\n"
         f"- Trained on sales up to **{month_label(MAX_MONTH)}**.\n"
@@ -276,22 +393,23 @@ with st.sidebar:
 # ===================================================================
 # HEADER
 # ===================================================================
-st.title("🏠 HDB Resale Price Estimator")
-st.write(
-    "Thinking of buying or selling in **Punggol, Sengkang or Hougang**? "
-    "Fill in the flat's details below to see what it is likely to be worth."
+st.title("HDB Resale Price Estimator", anchor=False)
+st.markdown(
+    "Valuation guide for **Punggol, Sengkang and Hougang**. Enter a flat's "
+    "details to see what it is likely to be worth, and what is driving that "
+    "figure."
 )
 st.info(
-    "**First time here?** Every field is already filled in with the most common "
-    "answer for that kind of flat, so you can press **Estimate price** straight "
-    "away and adjust afterwards. Hover the **?** beside any field for help.",
-    icon="👋",
+    "**First time here?** Every field is pre-filled with the most common answer "
+    "for that kind of flat, so you can press **Estimate price** straight away "
+    "and adjust afterwards. Hover the **?** beside any field for help.",
+    icon=":material/lightbulb:",
 )
 
 # ===================================================================
 # INPUTS
 # ===================================================================
-st.subheader("1 · Where is the flat?")
+eyebrow(1, "Where is the flat?")
 loc_left, loc_right = st.columns(2)
 
 with loc_left:
@@ -310,7 +428,7 @@ with loc_right:
         help=f"Only streets that exist in {town.title()} are listed.",
     )
 
-st.subheader("2 · What kind of flat is it?")
+eyebrow(2, "What kind of flat is it?")
 type_left, type_right = st.columns(2)
 
 with type_left:
@@ -351,7 +469,7 @@ st.caption(
     "as is if you are not sure. The exact figure is on the flat's resale listing."
 )
 
-st.subheader("3 · Which unit, and when?")
+eyebrow(3, "Which unit, and when?")
 unit_left, unit_right = st.columns(2)
 
 with unit_left:
@@ -389,7 +507,7 @@ with unit_right:
         "judge how generously the flat is laid out for its size."
     )
 
-with st.expander("❓ Not sure what these terms mean?"):
+with st.expander("Not sure what these terms mean?", icon=":material/help:"):
     st.markdown(
         """
 | Term | What it means | Where to find it |
@@ -496,16 +614,20 @@ def predict(rows):
 def sensitivity_chart(data, x_field, x_type, x_title, marker, note):
     """One what-if curve: how the estimate moves as a single input changes.
 
-    A single blue series, with the user's own flat marked in orange and named
-    directly on the chart, so identity never depends on colour alone.
+    A single blue series, with the user's own flat marked in bronze and named
+    directly on the chart, so identity never depends on colour alone. Grid lines
+    stay low-contrast so they never compete with the data.
     """
     y = alt.Y("price:Q", title="Estimated price",
-              axis=alt.Axis(format="$,.0f"), scale=alt.Scale(zero=False))
+              axis=alt.Axis(format="$,.0f", titlePadding=10),
+              scale=alt.Scale(zero=False))
     x = alt.X(f"{x_field}:{x_type}", title=x_title,
+              axis=alt.Axis(titlePadding=10),
               scale=alt.Scale(zero=False) if x_type == "Q" else alt.Undefined)
 
     line = alt.Chart(data).mark_line(
-        color=SERIES, strokeWidth=2, point=alt.OverlayMarkDef(color=SERIES, size=28),
+        color=SERIES, strokeWidth=2,
+        point=alt.OverlayMarkDef(color=SERIES, size=26),
     ).encode(x=x, y=y, tooltip=[
         alt.Tooltip(f"{x_field}:{x_type}", title=x_title),
         alt.Tooltip("price:Q", title="Estimate", format="$,.0f"),
@@ -516,11 +638,22 @@ def sensitivity_chart(data, x_field, x_type, x_title, marker, note):
     ).encode(x=x, y=y)
 
     label = alt.Chart(marker).mark_text(
-        text="Your flat", color=HIGHLIGHT, dy=-10, fontSize=12, fontWeight="bold",
+        text="Your flat", color=HIGHLIGHT, dy=-14, fontSize=11,
+        fontWeight="bold", font=CHART_FONT,
     ).encode(x=x, y=y)
 
-    chart = (line + dot + label).properties(height=260).configure_view(
-        strokeWidth=0).configure_axis(grid=True, gridOpacity=0.15, domainOpacity=0.3)
+    chart = (
+        (line + dot + label)
+        .properties(height=270)
+        .configure_view(strokeWidth=0)
+        .configure_axis(
+            grid=True, gridColor=GRID, gridOpacity=0.9, gridWidth=1,
+            domainColor=GRID, tickColor=GRID,
+            labelColor=INK_MUTED, titleColor=INK_MUTED,
+            labelFont=CHART_FONT, titleFont=CHART_FONT,
+            labelFontSize=11, titleFontSize=11, titleFontWeight=600,
+        )
+    )
     st.altair_chart(chart, width="stretch")
     st.caption(note)
 
@@ -531,18 +664,19 @@ st.divider()
 # been pressed the estimate stays on screen and refreshes as inputs change, so
 # the user can compare flats without clicking again.
 button_col, reset_col = st.columns([3, 1])
-if button_col.button("Estimate price", type="primary", width="stretch"):
+if button_col.button("Estimate price", type="primary", width="stretch",
+                     icon=":material/calculate:"):
     st.session_state.show_estimate = True
-if reset_col.button("Reset", width="stretch"):
+if reset_col.button("Reset", width="stretch", icon=":material/restart_alt:"):
     st.session_state.show_estimate = False
 
 for message in errors:
-    st.error(message, icon="🚫")
+    st.error(message, icon=":material/error:")
 for message in warnings:
-    st.warning(message, icon="⚠️")
+    st.warning(message, icon=":material/warning:")
 
 if errors:
-    st.info("Fix the problem above to see an estimate.", icon="ℹ️")
+    st.info("Fix the problem above to see an estimate.", icon=":material/info:")
 
 elif st.session_state.get("show_estimate"):
     try:
@@ -551,16 +685,17 @@ elif st.session_state.get("show_estimate"):
         st.error(
             f"The estimate could not be calculated ({type(exc).__name__}: {exc}). "
             "Please adjust the inputs and try again.",
-            icon="🚫",
+            icon=":material/error:",
         )
     else:
         low, high = price - TEST_MAE, price + TEST_MAE
         st.markdown(
             f"""
-            <div class="price-card">
-              <div class="label">Estimated resale price</div>
-              <div class="value">${price:,.0f}</div>
-              <div class="range">Most likely between ${low:,.0f} and ${high:,.0f}</div>
+            <div class="result">
+              <div class="caption">Estimated resale price</div>
+              <div class="amount">${price:,.0f}</div>
+              <div class="band">Likely range
+                <b>${low:,.0f}</b> to <b>${high:,.0f}</b></div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -580,6 +715,7 @@ elif st.session_state.get("show_estimate"):
                 value=f"${median:,} median",
                 delta=f"{diff:+,.0f} ({pct:+.1f}%)",
                 help="Median of the last 12 months of transactions in the dataset.",
+                border=True,
             )
             if abs(pct) < 5:
                 verdict = "in line with what comparable flats have been selling for."
@@ -592,14 +728,17 @@ elif st.session_state.get("show_estimate"):
             st.write(f"This flat is **{verdict}**")
 
         # ---------------------------------------------------------- what-ifs
-        st.subheader("What is driving this price?")
+        eyebrow(4, "What is driving this price?")
         st.write(
             "Each chart re-asks the model the same question with **one** detail "
             "changed and everything else held exactly as you entered it. The "
-            "orange dot is your flat."
+            "bronze dot is your flat."
         )
-        tab_time, tab_area, tab_storey = st.tabs(
-            ["📈 Over time", "📐 Floor area", "🏢 Storey"])
+        tab_time, tab_area, tab_storey = st.tabs([
+            ":material/trending_up: Over time",
+            ":material/straighten: Floor area",
+            ":material/stairs: Storey",
+        ])
 
         with tab_time:
             months = sorted({*range(0, MAX_MONTH + 1, 3), months_since_2017, MAX_MONTH})
@@ -645,7 +784,7 @@ elif st.session_state.get("show_estimate"):
             )
 
         # ---------------------------------------------------------- details
-        with st.expander("📋 The details you entered"):
+        with st.expander("The details you entered", icon=":material/list_alt:"):
             st.dataframe(
                 pd.DataFrame({
                     "Detail": ["Town", "Street", "Flat type", "Flat model",
@@ -660,7 +799,8 @@ elif st.session_state.get("show_estimate"):
                 hide_index=True, width="stretch",
             )
 
-        with st.expander("⚠️ What this estimate assumes, and when to distrust it"):
+        with st.expander("What this estimate assumes, and when to distrust it",
+                         icon=":material/warning:"):
             st.markdown(
                 f"""
 **How the model decides.** Floor area and sale month together account for around
@@ -680,7 +820,7 @@ model make up the rest.
 **When to trust it less**
 - Rare combinations — a 2 ROOM flat, or an EXECUTIVE, where there were far fewer
   sales to learn from.
-- Anything flagged with a ⚠️ warning above.
+- Anything flagged with a warning above.
 - Flats with unusual features the dataset does not record at all: renovation
   standard, exact facing, or proximity to an MRT entrance.
 
@@ -692,7 +832,7 @@ valuer for an actual transaction.
 
 else:
     st.markdown(
-        '<div class="placeholder">Set the flat\'s details above, then press '
+        '<div class="awaiting">Set the flat\'s details above, then press '
         '<b>Estimate price</b>.</div>',
         unsafe_allow_html=True,
     )
