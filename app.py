@@ -13,24 +13,11 @@ The app never reads the CSV. It only needs the two artefacts the notebook saves
 Any figure quoted in the interface is therefore hard-coded below and labelled
 with where it came from.
 
-Design
-------
-Swiss / minimalist: a strict two-column grid, numbered steps, one accent colour,
-thin rules instead of heavy shadows, and no decoration that does not carry
-information. Everything lives in this one file - including the CSS that
-recolours Streamlit's own widgets, so no .streamlit/config.toml is needed.
-
-Every question is on screen at once - nothing is hidden behind an optional
-section, because a field a user cannot see is a field they cannot answer. Each
-one is pre-filled with the most common value for that kind of flat, so the form
-opens on a realistic flat and can be submitted immediately.
-
-The result is explained with numbers rather than charts: "three floors higher
-is worth +$6,300" needs no axis-reading, and it is the form a buyer or seller
-can act on. Icons are Material Symbols (Streamlit's ":material/name:" syntax)
-rather than emoji, so they inherit the theme instead of rendering as a different
-picture on every operating system. Money is set in tabular figures so digits
-stay aligned as values change.
+Every input is pre-filled with the most common value for that kind of flat, so
+the form can be submitted immediately, and inputs are validated against what
+the training data actually contains before a prediction is shown. The result
+is explained with numbers ("three floors higher: +$5,019") because those are
+directly actionable for a buyer or seller.
 """
 import joblib
 import pandas as pd
@@ -172,9 +159,8 @@ MONTH_LOOKUP = {label: m for m, label in enumerate(MONTH_OPTIONS)}
 # ===================================================================
 # STYLING
 # ===================================================================
-# Swiss treatment: one typeface, one accent, thin rules, generous whitespace,
-# tabular figures so money columns stay aligned. Values are defined once as
-# custom properties so no stray hex appears further down.
+# One typeface, one accent colour, thin rules instead of shadows. Colours are
+# defined once as CSS variables so no stray hex appears further down.
 st.markdown(
     """
     <style>
@@ -249,15 +235,10 @@ st.markdown(
 
       [data-testid="stMetricValue"] { font-size: 1.28rem; font-weight: 600; }
 
-      /* ---- Recolouring Streamlit's own widgets -------------------------
-         Streamlit's accent defaults to red (#FF4B4B). Normally that is changed
-         in .streamlit/config.toml, but everything here is kept in this single
-         file, so the widgets are recoloured directly.
-
-         Buttons expose a stable test id, so they are set explicitly. The
-         slider's filled track is drawn as an inline gradient with no selector
-         to hook, so its red is rotated round the colour wheel to blue instead.
-         Greys have no saturation, so a hue rotation leaves them untouched. */
+      /* Streamlit's accent defaults to red (#FF4B4B). Buttons can be set
+         directly; sliders, dropdowns and number fields draw their accent
+         inline with no selector to hook, so their red is hue-rotated to blue
+         instead. Greys have no saturation, so the rotation leaves them alone. */
       [data-testid^="stBaseButton-primary"] {
           background: var(--blue) !important;
           border-color: var(--blue) !important;
@@ -267,11 +248,6 @@ st.markdown(
           background: var(--navy) !important;
           border-color: var(--navy) !important;
       }
-         Sliders, dropdowns and number fields all draw their accent inline with
-         no selector to hook, so their red is rotated round the colour wheel to
-         blue instead. Greys and whites have no saturation, so a hue rotation
-         leaves them untouched. The open dropdown is a separate portal
-         (stSelectboxVirtualDropdown), so filtering the control cannot clip it. */
       [data-testid="stSlider"],
       [data-testid="stSelectbox"],
       [data-testid="stNumberInput"] {
