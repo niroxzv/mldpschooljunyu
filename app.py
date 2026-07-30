@@ -275,6 +275,24 @@ st.markdown(
           outline-offset: 2px !important;
       }
 
+      /* ...except the search input inside a dropdown or number field. Those
+         inputs are sized to their text, so any ring draws a box around the
+         words rather than around the control. The field already shows focus
+         with its own border (above), so nothing is lost. All three ways a
+         browser can draw that box are cleared, in every focus state. */
+      [data-testid="stSelectbox"] input,
+      [data-testid="stSelectbox"] input:focus,
+      [data-testid="stSelectbox"] input:focus-visible,
+      [data-testid="stSelectbox"] input:focus-within,
+      [data-testid="stNumberInput"] input,
+      [data-testid="stNumberInput"] input:focus,
+      [data-testid="stNumberInput"] input:focus-visible,
+      [data-testid="stNumberInput"] input:focus-within {
+          outline: none !important;
+          border: none !important;
+          box-shadow: none !important;
+      }
+
       /* With no config file pinning the theme, the app follows the viewer's
          system setting, so the custom surfaces need a dark variant. Streamlit's
          own dark background is near-black; replace it with a dark slate grey,
@@ -289,16 +307,21 @@ st.markdown(
           [data-testid="stSidebar"] { background: #1E252F; }
           .result { background: #1E2530; }
 
-          /* The dropdowns and number field sit inside the hue-rotate filter,
-             and Streamlit's dark field surface is blue-tinted - the rotation
-             drags that tint to olive. Pure grey has zero saturation, so the
-             rotation passes it through unchanged and the fields stay neutral.
-             Every div inside the widget is painted except the label row, so
-             this does not depend on Streamlit's internal DOM structure. */
+          /* Streamlit's dark field surface is blue-tinted, which does not sit
+             well against the slate page. Paint every part of these controls a
+             flat neutral grey instead - divs, the inner search input and the
+             number field's +/- buttons - so a focused field and an idle one
+             are the same colour. The dropdown list is a separate portal, so it
+             is matched by name below. */
           [data-testid="stSelectbox"] div:not([data-testid="stWidgetLabel"] *),
+          [data-testid="stSelectbox"] input,
           [data-testid="stNumberInput"] div:not([data-testid="stWidgetLabel"] *),
           [data-testid="stNumberInput"] input,
           [data-testid="stNumberInput"] button {
+              background-color: #262626 !important;
+          }
+          [data-testid="stSelectboxVirtualDropdown"],
+          [data-testid="stSelectboxVirtualDropdown"] li {
               background-color: #262626 !important;
           }
       }
