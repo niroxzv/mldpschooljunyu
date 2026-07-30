@@ -248,17 +248,24 @@ st.markdown(
           background: var(--navy) !important;
           border-color: var(--navy) !important;
       }
-      [data-testid="stSlider"],
-      [data-testid="stSelectbox"],
-      [data-testid="stNumberInput"] {
+      [data-testid="stSlider"] {
           filter: hue-rotate(218deg) saturate(1.05);
+      }
+
+      /* Dropdowns and the number field are NOT filtered - the filter would
+         drag their tinted surface towards olive. Instead their red focus
+         border is overridden directly: :focus-within hits whichever inner div
+         carries the border without depending on Streamlit's DOM structure. */
+      [data-testid="stSelectbox"] div:focus-within,
+      [data-testid="stNumberInput"] div:focus-within {
+          border-color: var(--blue) !important;
       }
 
       /* The dropdowns are type-to-search boxes, so clicking one places a text
          cursor. Typing still filters the list; the blinking caret is just
          hidden because it reads as a glitch on a dropdown. */
-      [data-testid="stSelectbox"] input,
-      div[data-baseweb="select"] input {
+      [data-testid="stSelectbox"],
+      [data-testid="stSelectbox"] * {
           caret-color: transparent !important;
       }
 
@@ -285,9 +292,11 @@ st.markdown(
           /* The dropdowns and number field sit inside the hue-rotate filter,
              and Streamlit's dark field surface is blue-tinted - the rotation
              drags that tint to olive. Pure grey has zero saturation, so the
-             rotation passes it through unchanged and the fields stay neutral. */
-          [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-          [data-testid="stNumberInput"] div[data-baseweb="input"],
+             rotation passes it through unchanged and the fields stay neutral.
+             Every div inside the widget is painted except the label row, so
+             this does not depend on Streamlit's internal DOM structure. */
+          [data-testid="stSelectbox"] div:not([data-testid="stWidgetLabel"] *),
+          [data-testid="stNumberInput"] div:not([data-testid="stWidgetLabel"] *),
           [data-testid="stNumberInput"] input,
           [data-testid="stNumberInput"] button {
               background-color: #262626 !important;
