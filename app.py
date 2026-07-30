@@ -17,8 +17,8 @@ Design
 ------
 Swiss / minimalist: a strict two-column grid, numbered steps, one accent colour,
 thin rules instead of heavy shadows, and no decoration that does not carry
-information. Theme colours are in .streamlit/config.toml, which is the only way
-to colour Streamlit's own widgets (sliders, buttons, focus rings).
+information. Everything lives in this one file - including the CSS that
+recolours Streamlit's own widgets, so no .streamlit/config.toml is needed.
 
 Every question is on screen at once - nothing is hidden behind an optional
 section, because a field a user cannot see is a field they cannot answer. Each
@@ -267,7 +267,16 @@ st.markdown(
           background: var(--navy) !important;
           border-color: var(--navy) !important;
       }
-      [data-testid="stSlider"] { filter: hue-rotate(218deg) saturate(1.05); }
+         Sliders, dropdowns and number fields all draw their accent inline with
+         no selector to hook, so their red is rotated round the colour wheel to
+         blue instead. Greys and whites have no saturation, so a hue rotation
+         leaves them untouched. The open dropdown is a separate portal
+         (stSelectboxVirtualDropdown), so filtering the control cannot clip it. */
+      [data-testid="stSlider"],
+      [data-testid="stSelectbox"],
+      [data-testid="stNumberInput"] {
+          filter: hue-rotate(218deg) saturate(1.05);
+      }
 
       /* Keyboard focus must stay visible - never remove the ring. */
       *:focus-visible {
@@ -477,11 +486,22 @@ step(3, "Which unit, and when?")
 unit_left, unit_right = st.columns(2)
 
 with unit_left:
-    storey_band = st.selectbox(
-        "Storey", list(STOREY_BANDS), index=3,
-        help="HDB publishes the floor as a 3-storey band, not the exact unit.",
+    # Ask for the actual floor, which is what a person knows, then convert to
+    # the band midpoint the model was trained on. HDB only publishes a 3-floor
+    # band for privacy, so every flat in a band shares one value - the caption
+    # below says so outright rather than leaving the user to notice it.
+    floor = st.number_input(
+        "Which floor?", min_value=1, max_value=27, value=11, step=1,
+        help="The actual floor the flat is on.",
     )
+    storey_band = list(STOREY_BANDS)[(int(floor) - 1) // 3]
     storey_mid = STOREY_BANDS[storey_band]
+    st.caption(
+        f"HDB groups floors into bands of three, so floor **{int(floor)}** is "
+        f"published as **{storey_band}**. The model was trained on the middle "
+        f"floor of each band, so it prices this as floor **{storey_mid:.0f}** — "
+        f"which is why every flat on floors {storey_band} gets the same estimate."
+    )
 
     lease_lo, lease_hi, lease_typical = TOWN_LEASE[town]
     remaining_lease_years = st.slider(
@@ -695,10 +715,10 @@ elif st.session_state.get("show_estimate"):
 
         # Storey: one band up, one band down, where those bands exist.
         if band_index + 1 < len(bands):
-            scenarios.append((f"Three floors higher (storey {bands[band_index + 1]})",
+            scenarios.append((f"Three floors higher (floor {STOREY_BANDS[bands[band_index + 1]]:.0f})",
                               {"storey_mid": STOREY_BANDS[bands[band_index + 1]]}))
         if band_index > 0:
-            scenarios.append((f"Three floors lower (storey {bands[band_index - 1]})",
+            scenarios.append((f"Three floors lower (floor {STOREY_BANDS[bands[band_index - 1]]:.0f})",
                               {"storey_mid": STOREY_BANDS[bands[band_index - 1]]}))
 
         # Floor area: 10 sqm either way, but only within this flat type's range.
@@ -745,7 +765,7 @@ elif st.session_state.get("show_estimate"):
                     "Value": [town.title(), street_name.title(), flat_type,
                               flat_model, f"{floor_area_sqm:.0f} sqm",
                               f"{floor_area_sqm / ROOMS[flat_type]:.1f} sqm",
-                              f"Floors {storey_band}",
+                              f"Floor {int(floor)} (band {storey_band})",
                               f"{remaining_lease_years:.1f} years", sale_label],
                 }),
                 hide_index=True, width="stretch",
