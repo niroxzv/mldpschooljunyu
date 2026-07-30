@@ -13,25 +13,25 @@ The app never reads the CSV. It only needs the two artefacts the notebook saves
 Any figure quoted in the interface is therefore hard-coded below and labelled
 with where it came from.
 
-Design notes
-------------
-Built for someone who has never used a valuation tool and may not know their
-flat's details. Three principles:
+Design
+------
+Swiss / minimalist: a strict two-column grid, numbered steps, one accent colour,
+thin rules instead of heavy shadows, and no decoration that does not carry
+information. Theme colours are in .streamlit/config.toml, which is the only way
+to colour Streamlit's own widgets (sliders, buttons, focus rings).
 
-1. Five questions on screen, not eight. Flat model, lease and sale month are
-   the ones an ordinary buyer is least likely to know, so they sit behind an
-   optional section with sensible defaults already filled in.
-2. Every answer is pre-filled with the most common value for that kind of flat,
-   so pressing the button immediately gives a believable number.
-3. One chart, not three. Price over time is the one people intuitively expect;
-   the others needed a paragraph of explanation each to be useful.
+Every question is on screen at once - nothing is hidden behind an optional
+section, because a field a user cannot see is a field they cannot answer. Each
+one is pre-filled with the most common value for that kind of flat, so the form
+opens on a realistic flat and can be submitted immediately.
 
-Icons are Material Symbols (Streamlit's ":material/name:" syntax) rather than
-emoji, so they inherit the theme instead of rendering differently per OS. Money
-is set in tabular figures so digits stay aligned as values change.
+The result is explained with numbers rather than charts: "three floors higher
+is worth +$6,300" needs no axis-reading, and it is the form a buyer or seller
+can act on. Icons are Material Symbols (Streamlit's ":material/name:" syntax)
+rather than emoji, so they inherit the theme instead of rendering as a different
+picture on every operating system. Money is set in tabular figures so digits
+stay aligned as values change.
 """
-
-import altair as alt          # ships with Streamlit; no extra requirement
 import joblib
 import pandas as pd
 import streamlit as st
@@ -41,7 +41,7 @@ st.set_page_config(
     page_title="HDB Resale Price Estimator",
     page_icon=":material/apartment:",
     layout="centered",
-    initial_sidebar_state="collapsed",   # start clean; detail is opt-in
+    initial_sidebar_state="expanded",
 )
 
 # ===================================================================
@@ -93,11 +93,14 @@ FLAT_TYPE_AREA = {
     "EXECUTIVE": (125.0, 177.0, 137.0),
 }
 
-# Plain-English hint for each flat type, so someone can pick without knowing
-# HDB's naming.
+# Plain-English hint per flat type, so the user does not need to know HDB's
+# naming to pick the right one.
 FLAT_TYPE_HINT = {
-    "2 ROOM": "1 bedroom", "3 ROOM": "2 bedrooms", "4 ROOM": "3 bedrooms",
-    "5 ROOM": "3 bedrooms + extra living space", "EXECUTIVE": "Largest, often double-storey",
+    "2 ROOM": "1 bedroom",
+    "3 ROOM": "2 bedrooms",
+    "4 ROOM": "3 bedrooms",
+    "5 ROOM": "3 bedrooms, larger",
+    "EXECUTIVE": "largest, often double-storey",
 }
 
 # flat_type -> the flat models that actually exist for it. A 2 ROOM flat is
@@ -156,15 +159,6 @@ TEST_R2 = 0.9721
 N_TRANSACTIONS = 47_864
 N_TEST = 9_573
 
-# Chart colours. This pair was checked with a palette validator and passes all
-# six checks - lightness band, chroma floor, colour-blind separation,
-# normal-vision separation and contrast against the surface - in light AND dark.
-SERIES = "#2563EB"       # the model's response curve
-HIGHLIGHT = "#B45309"    # the flat the user actually entered
-INK_MUTED = "#64748B"
-GRID = "#E2E8F0"
-CHART_FONT = "IBM Plex Sans, Segoe UI, system-ui, sans-serif"
-
 
 def month_label(m):
     """Turn months-since-Jan-2017 into a label a person can read."""
@@ -178,14 +172,17 @@ MONTH_LOOKUP = {label: m for m, label in enumerate(MONTH_OPTIONS)}
 # ===================================================================
 # STYLING
 # ===================================================================
+# Swiss treatment: one typeface, one accent, thin rules, generous whitespace,
+# tabular figures so money columns stay aligned. Values are defined once as
+# custom properties so no stray hex appears further down.
 st.markdown(
     """
     <style>
       @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
       :root {
-          --navy:      #0F172A;
-          --navy-soft: #1E3A5F;
+          --navy:      #1E3A5F;
+          --blue:      #2563EB;
           --ink:       #0F172A;
           --ink-muted: #64748B;
           --rule:      #E2E8F0;
@@ -198,18 +195,35 @@ st.markdown(
 
       /* Money must use tabular figures, or digits shift width as values change. */
       .result .amount, [data-testid="stMetricValue"],
-      [data-testid="stMetricDelta"] {
+      [data-testid="stMetricDelta"], .stDataFrame {
           font-variant-numeric: tabular-nums;
           font-feature-settings: "tnum";
+      }
+
+      /* Numbered step marker + rule above each section. The number carries the
+         sequence so the heading does not have to. */
+      .step {
+          display: flex; align-items: baseline; gap: .7rem;
+          margin: 2.1rem 0 1rem 0; padding-top: 1.1rem;
+          border-top: 1px solid var(--rule);
+      }
+      .step:first-of-type { margin-top: 1rem; }
+      .step .n {
+          font-size: .72rem; font-weight: 700; letter-spacing: .12em;
+          color: var(--blue); flex: none;
+      }
+      .step .t {
+          font-size: 1.16rem; font-weight: 600; color: var(--ink);
+          letter-spacing: -.01em;
       }
 
       /* The headline result. A navy rule on the left rather than a coloured
          fill, so the number itself is the loudest thing on the page. */
       .result {
           border: 1px solid var(--rule);
-          border-left: 3px solid var(--navy-soft);
+          border-left: 3px solid var(--navy);
           border-radius: 4px;
-          padding: 1.6rem 1.5rem;
+          padding: 1.7rem 1.6rem;
           background: #fff;
       }
       .result .caption {
@@ -217,11 +231,11 @@ st.markdown(
           text-transform: uppercase; color: var(--ink-muted);
       }
       .result .amount {
-          font-size: 3rem; font-weight: 700; color: var(--ink);
-          line-height: 1.1; margin: .4rem 0 .35rem 0; letter-spacing: -.02em;
+          font-size: 3.1rem; font-weight: 700; color: var(--ink);
+          line-height: 1.05; margin: .45rem 0 .4rem 0; letter-spacing: -.025em;
       }
       .result .band {
-          font-size: .95rem; color: var(--ink-muted);
+          font-size: .93rem; color: var(--ink-muted);
           padding-top: .6rem; border-top: 1px solid var(--rule);
       }
       .result .band b { color: var(--ink); font-weight: 600; }
@@ -233,40 +247,44 @@ st.markdown(
           color: var(--ink-muted); font-size: .95rem; background: var(--well);
       }
 
-      [data-testid="stMetricValue"] { font-size: 1.3rem; font-weight: 600; }
+      [data-testid="stMetricValue"] { font-size: 1.28rem; font-weight: 600; }
 
-      /* Streamlit's primary button is red by default; recolour to the navy
-         accent here so the whole app stays in this single file. */
+      /* ---- Recolouring Streamlit's own widgets -------------------------
+         Streamlit's accent defaults to red (#FF4B4B). Normally that is changed
+         in .streamlit/config.toml, but everything here is kept in this single
+         file, so the widgets are recoloured directly.
+
+         Buttons expose a stable test id, so they are set explicitly. The
+         slider's filled track is drawn as an inline gradient with no selector
+         to hook, so its red is rotated round the colour wheel to blue instead.
+         Greys have no saturation, so a hue rotation leaves them untouched. */
       [data-testid^="stBaseButton-primary"] {
-          background: var(--navy-soft) !important;
-          border-color: var(--navy-soft) !important;
+          background: var(--blue) !important;
+          border-color: var(--blue) !important;
           color: #fff !important;
       }
       [data-testid^="stBaseButton-primary"]:hover {
-          background: var(--navy) !important; border-color: var(--navy) !important;
+          background: var(--navy) !important;
+          border-color: var(--navy) !important;
       }
+      [data-testid="stSlider"] { filter: hue-rotate(218deg) saturate(1.05); }
 
       /* Keyboard focus must stay visible - never remove the ring. */
       *:focus-visible {
-          outline: 2px solid var(--navy-soft) !important;
+          outline: 2px solid var(--blue) !important;
           outline-offset: 2px !important;
       }
 
-      /* The app follows the viewer's system setting, so the custom surfaces
-         need a dark variant. Steps are chosen for the dark background rather
-         than mechanically inverted. */
+      /* With no config file pinning the theme, the app follows the viewer's
+         system setting, so the custom surfaces need a dark variant. Steps are
+         chosen against the dark background rather than mechanically inverted. */
       @media (prefers-color-scheme: dark) {
           :root {
               --ink: #E8EDF5; --ink-muted: #94A3B8;
-              --rule: #2A3648; --well: #161C27; --navy-soft: #5B8DD6;
+              --rule: #2A3648; --well: #161C27;
+              --navy: #5B8DD6; --blue: #4D8DF0;
           }
           .result { background: #131A25; }
-          [data-testid^="stBaseButton-primary"] {
-              background: #2D5A94 !important; border-color: #2D5A94 !important;
-          }
-          [data-testid^="stBaseButton-primary"]:hover {
-              background: #3A6FB0 !important; border-color: #3A6FB0 !important;
-          }
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -279,6 +297,15 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
+def step(number, title):
+    """Numbered section marker, in place of a plain heading."""
+    st.markdown(
+        f'<div class="step"><span class="n">STEP {number}</span>'
+        f'<span class="t">{title}</span></div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ===================================================================
@@ -332,94 +359,174 @@ KNOWN_MODELS = known_categories("flat_model_")
 
 
 # ===================================================================
+# SIDEBAR
+# ===================================================================
+with st.sidebar:
+    st.subheader("About this estimator", anchor=False)
+    st.write(
+        "Prices are predicted by a **Gradient Boosting** model trained on every "
+        "HDB resale transaction in Punggol, Sengkang and Hougang since 2017 "
+        f"({N_TRANSACTIONS:,} sales)."
+    )
+
+    st.markdown("**Accuracy**")
+    c1, c2 = st.columns(2)
+    c1.metric("Typical error", f"${TEST_MAE:,}", border=True, help=(
+        f"Mean absolute error on {N_TEST:,} held-out sales the model never saw "
+        "while training."
+    ))
+    c2.metric("R squared", f"{TEST_R2:.3f}", border=True, help=(
+        "The share of the price variation between flats that the model explains."
+    ))
+    st.caption(
+        f"{TEST_MAE:,} dollars is about 3.4% of a typical 520,000 dollar flat — "
+        "close enough to anchor an asking price or judge whether a listing is fair."
+    )
+
+    st.markdown("**Scope**")
+    st.markdown(
+        "- Covers **Punggol, Sengkang and Hougang** only.\n"
+        f"- Trained on sales up to **{month_label(MAX_MONTH)}**.\n"
+        "- An estimate, **not a formal valuation** — an HDB-appointed valuer is "
+        "still required for an actual transaction."
+    )
+    st.caption("Data source: data.gov.sg — HDB Resale Flat Prices.")
+
+
+# ===================================================================
 # HEADER
 # ===================================================================
-st.title("What is my HDB flat worth?", anchor=False)
+st.title("HDB Resale Price Estimator", anchor=False)
 st.markdown(
-    "Get an estimated resale price for a flat in **Punggol, Sengkang or "
-    "Hougang**, based on 47,864 real sales since 2017."
+    "Valuation guide for **Punggol, Sengkang and Hougang**. Enter a flat's "
+    "details to see what it is likely to be worth, and what is driving that "
+    "figure."
 )
-st.caption(
-    "Answer the questions below and press Estimate. Every field already has the "
-    "most common answer filled in, so you can change only what you know."
+st.info(
+    "Every field is already set to the most common answer for that kind of flat, "
+    "so you can press **Estimate price** straight away and adjust afterwards. "
+    "Hover the **?** beside any field for help.",
+    icon=":material/lightbulb:",
 )
 
 # ===================================================================
-# INPUTS - the five questions almost anyone can answer
+# INPUTS - all eight on screen. A field the user cannot see is a field
+# they cannot answer, so nothing is hidden behind an optional section.
 # ===================================================================
-left, right = st.columns(2)
+step(1, "Where is the flat?")
+loc_left, loc_right = st.columns(2)
 
-with left:
-    town = st.selectbox("Which town?", sorted(t for t in TOWN_STREETS if t in KNOWN_TOWNS))
+with loc_left:
+    town = st.selectbox(
+        "Town", sorted(t for t in TOWN_STREETS if t in KNOWN_TOWNS),
+        help="The three North East Line towns this model covers.",
+    )
 
-    # Filtered by town: this stops an impossible address such as
+with loc_right:
+    # Filtered by town: this is what stops an impossible address such as
     # Hougang + PUNGGOL DR from ever reaching the model.
     streets = [s for s in TOWN_STREETS[town] if s in KNOWN_STREETS]
-    street_name = st.selectbox("Which street?", streets)
+    street_name = st.selectbox(
+        "Street", streets,
+        help=f"Only streets that exist in {town.title()} are listed.",
+    )
 
+step(2, "What kind of flat is it?")
+type_left, type_right = st.columns(2)
+
+with type_left:
+    flat_type = st.selectbox(
+        "Flat type",
+        [t for t in FLAT_TYPE_AREA if t in KNOWN_TYPES],
+        index=2,                       # 4 ROOM: about half of all sales here
+        format_func=lambda t: f"{t} — {FLAT_TYPE_HINT[t]}",
+        help="How HDB classifies the flat's size.",
+    )
+
+with type_right:
+    # Filtered by flat type, so e.g. a 2 ROOM flat cannot be a Maisonette.
+    models_for_type = [m for m in FLAT_TYPE_MODELS[flat_type] if m in KNOWN_MODELS]
+    # Default to the commonest model for this flat type rather than whatever
+    # sorts first, so the form opens on a realistic flat.
+    default_model = next(
+        (m for m in ("Model A", "Premium Apartment", "Improved") if m in models_for_type),
+        models_for_type[0],
+    )
+    flat_model = st.selectbox(
+        "Flat model", models_for_type,
+        index=models_for_type.index(default_model),
+        help="HDB's design name for the layout. It is printed on the resale listing.",
+    )
+
+area_min, area_max, area_typical = FLAT_TYPE_AREA[flat_type]
+floor_area_sqm = st.slider(
+    "Floor area (sqm)",
+    min_value=float(area_min), max_value=float(area_max),
+    value=float(area_typical), step=1.0,
+    help=(
+        f"{flat_type} flats in these towns range from {area_min:.0f} to "
+        f"{area_max:.0f} sqm."
+    ),
+)
+st.caption(
+    f"Most **{flat_type}** flats here are **{area_typical:.0f} sqm** — leave it "
+    "as is if you are not sure. The exact figure is on the flat's resale listing."
+)
+
+step(3, "Which unit, and when?")
+unit_left, unit_right = st.columns(2)
+
+with unit_left:
     storey_band = st.selectbox(
-        "Which floor?", list(STOREY_BANDS), index=3,
-        help="HDB gives the floor as a range of 3, not the exact unit.",
+        "Storey", list(STOREY_BANDS), index=3,
+        help="HDB publishes the floor as a 3-storey band, not the exact unit.",
     )
     storey_mid = STOREY_BANDS[storey_band]
 
-with right:
-    flat_type = st.selectbox(
-        "What size of flat?",
-        [t for t in FLAT_TYPE_AREA if t in KNOWN_TYPES],
-        index=2,                       # 4 ROOM: about half of all sales here
-        format_func=lambda t: f"{t}  ({FLAT_TYPE_HINT[t]})",
+    lease_lo, lease_hi, lease_typical = TOWN_LEASE[town]
+    remaining_lease_years = st.slider(
+        "Remaining lease (years)",
+        min_value=40.0, max_value=99.0,
+        value=float(lease_typical), step=0.5,
+        help=(
+            f"Flats sold in {town.title()} had between {lease_lo:.0f} and "
+            f"{lease_hi:.0f} years left. HDB flats start with a 99-year lease."
+        ),
     )
 
-    area_min, area_max, area_typical = FLAT_TYPE_AREA[flat_type]
-    floor_area_sqm = st.slider(
-        "How big is it? (sqm)",
-        min_value=float(area_min), max_value=float(area_max),
-        value=float(area_typical), step=1.0,
+with unit_right:
+    sale_label = st.select_slider(
+        "Sale month", options=MONTH_OPTIONS, value=MONTH_OPTIONS[-1],
+        help=(
+            "When the sale happens. Prices in these towns rose sharply over this "
+            "period, so timing changes the answer a lot."
+        ),
     )
+    months_since_2017 = MONTH_LOOKUP[sale_label]
+
+    rooms = ROOMS[flat_type]
     st.caption(
-        f"Most **{flat_type}** flats are **{area_typical:.0f} sqm**. "
-        "Leave it if you are not sure."
+        f"**Space per room:** {floor_area_sqm / rooms:.1f} sqm "
+        f"({floor_area_sqm:.0f} sqm over {rooms} rooms). The model uses this to "
+        "judge how generously the flat is laid out for its size."
     )
 
-# The three fields an ordinary buyer is least likely to know, tucked away with
-# sensible defaults already applied. Progressive disclosure: the form asks five
-# questions, not eight, but nothing is lost.
-with st.expander("Know more details? (optional)", icon=":material/tune:"):
-    d_left, d_right = st.columns(2)
+with st.expander("Not sure what these terms mean?", icon=":material/help:"):
+    st.markdown(
+        """
+| Term | What it means | Where to find it |
+|---|---|---|
+| **Flat type** | Size class — a *4 ROOM* has 3 bedrooms plus a living room. | The resale listing |
+| **Flat model** | HDB's design name (*Model A*, *Improved*, *Maisonette*…). Two flats the same size can be different models. | The resale listing |
+| **Floor area** | Internal floor space in square metres. | The resale listing, or HDB's My Flat Dashboard |
+| **Storey** | HDB publishes a 3-floor band instead of the exact unit, for privacy. | The resale listing |
+| **Remaining lease** | Years left on the 99-year lease. A shorter lease usually means a lower price. | HDB's My Flat Dashboard |
+| **Sale month** | When the sale is agreed. Prices move over time, so this matters. | Your own timeline |
 
-    with d_left:
-        models_for_type = [m for m in FLAT_TYPE_MODELS[flat_type] if m in KNOWN_MODELS]
-        # Default to the commonest model for this flat type rather than whatever
-        # sorts first, so the form opens on a realistic flat.
-        default_model = next(
-            (m for m in ("Model A", "Premium Apartment", "Improved") if m in models_for_type),
-            models_for_type[0],
-        )
-        flat_model = st.selectbox(
-            "Flat model", models_for_type,
-            index=models_for_type.index(default_model),
-            help="HDB's design name for the layout. It is on the resale listing.",
-        )
-
-        lease_lo, lease_hi, lease_typical = TOWN_LEASE[town]
-        remaining_lease_years = st.slider(
-            "Years left on the lease",
-            min_value=40.0, max_value=99.0,
-            value=float(lease_typical), step=0.5,
-            help="HDB flats start with 99 years. Check HDB's My Flat Dashboard.",
-        )
-
-    with d_right:
-        sale_label = st.select_slider(
-            "When is the sale?", options=MONTH_OPTIONS, value=MONTH_OPTIONS[-1],
-            help="Prices rose a lot over this period, so timing matters.",
-        )
-        months_since_2017 = MONTH_LOOKUP[sale_label]
-        st.caption(
-            "Leave these alone if you are unsure — they are already set to the "
-            f"most common values for a {flat_type} flat in {town.title()}."
-        )
+**Don't know one of these?** Leave it at the default — each is pre-set to the
+most common value for that kind of flat.
+        """
+    )
 
 
 # ===================================================================
@@ -438,17 +545,17 @@ def validate():
     if street_name not in KNOWN_STREETS:
         errors.append(
             f"**{street_name}** is not one of the {len(KNOWN_STREETS)} streets "
-            "this tool covers, so it cannot be priced."
+            "the model was trained on, so it cannot be priced."
         )
     if street_name not in TOWN_STREETS.get(town, []):
         errors.append(
-            f"**{street_name}** is not in **{town.title()}**. Please pick a "
-            "street that matches the town."
+            f"**{street_name}** is not in **{town.title()}**. Pick a street "
+            "that matches the town."
         )
     if flat_model not in FLAT_TYPE_MODELS.get(flat_type, []):
         errors.append(
             f"No **{flat_type}** flat in these towns is a **{flat_model}**. "
-            "Please choose a different flat model."
+            "Choose a different flat model."
         )
 
     # Soft checks: possible, but outside the range the model learned from, so
@@ -456,9 +563,9 @@ def validate():
     lease_lo, lease_hi, _ = TOWN_LEASE[town]
     if not lease_lo - 0.5 <= remaining_lease_years <= lease_hi + 0.5:
         warnings.append(
-            f"Flats in {town.title()} normally have {lease_lo:.0f}–{lease_hi:.0f} "
-            f"years left, not {remaining_lease_years:.0f}. The estimate below is "
-            "less reliable than usual."
+            f"A **{remaining_lease_years:.0f}-year** lease is outside the "
+            f"{lease_lo:.0f}–{lease_hi:.0f} years seen in {town.title()}, so "
+            "this estimate is less reliable than usual."
         )
 
     area_lo, area_hi, _ = FLAT_TYPE_AREA[flat_type]
@@ -496,7 +603,7 @@ def base_row(**overrides):
 def predict(rows):
     """Turn raw form values into the 97 columns the model expects, and predict.
 
-    Accepts a list of row dicts so the price-history chart can price dozens of
+    Accepts a list of row dicts so the comparison table can price several
     what-if flats in a single call.
     """
     frame = pd.DataFrame(rows)
@@ -509,9 +616,12 @@ def predict(rows):
 
 
 st.write("")
-if st.button("Estimate price", type="primary", width="stretch",
-             icon=":material/calculate:"):
+button_col, reset_col = st.columns([3, 1])
+if button_col.button("Estimate price", type="primary", width="stretch",
+                     icon=":material/calculate:"):
     st.session_state.show_estimate = True
+if reset_col.button("Reset", width="stretch", icon=":material/restart_alt:"):
+    st.session_state.show_estimate = False
 
 for message in errors:
     st.error(message, icon=":material/error:")
@@ -519,7 +629,7 @@ for message in warnings:
     st.warning(message, icon=":material/warning:")
 
 if errors:
-    st.info("Please fix the problem above to see an estimate.", icon=":material/info:")
+    st.info("Fix the problem above to see an estimate.", icon=":material/info:")
 
 elif st.session_state.get("show_estimate"):
     try:
@@ -527,7 +637,7 @@ elif st.session_state.get("show_estimate"):
     except Exception as exc:                                # noqa: BLE001
         st.error(
             f"The estimate could not be calculated ({type(exc).__name__}: {exc}). "
-            "Please adjust your answers and try again.",
+            "Please adjust the inputs and try again.",
             icon=":material/error:",
         )
     else:
@@ -535,155 +645,153 @@ elif st.session_state.get("show_estimate"):
         st.markdown(
             f"""
             <div class="result">
-              <div class="caption">Estimated price</div>
+              <div class="caption">Estimated resale price</div>
               <div class="amount">${price:,.0f}</div>
-              <div class="band">Most likely between
-                <b>${low:,.0f}</b> and <b>${high:,.0f}</b></div>
+              <div class="band">Likely range
+                <b>${low:,.0f}</b> to <b>${high:,.0f}</b></div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+        st.caption(
+            f"The single best guess is ${price:,.0f}. The range is the model's "
+            f"typical error of plus or minus ${TEST_MAE:,} on flats it had never "
+            "seen before — treat it as the sensible negotiating window rather "
+            "than a guarantee."
+        )
 
-        # One plain-English sentence comparing to what really sold, instead of a
-        # metric widget the user has to interpret.
         median = RECENT_MEDIAN.get((town, flat_type))
         if median:
-            pct = (price - median) / median * 100
+            diff, pct = price - median, (price - median) / median * 100
+            st.metric(
+                label=f"Compared with recent {flat_type.lower()} sales in {town.title()}",
+                value=f"${median:,} median",
+                delta=f"{diff:+,.0f} ({pct:+.1f}%)",
+                help="Median of the last 12 months of transactions in the dataset.",
+                border=True,
+            )
             if abs(pct) < 5:
-                verdict = (f"That is about the same as other {flat_type.lower()} flats "
-                           f"in {town.title()}, which sold for around **${median:,}** "
-                           "over the past year.")
+                verdict = "in line with what comparable flats have been selling for."
             elif pct > 0:
-                verdict = (f"That is **{pct:.0f}% higher** than the typical "
-                           f"{flat_type.lower()} flat in {town.title()} "
-                           f"(**${median:,}**) — usually a higher floor, a bigger "
-                           "unit, or a more recent sale date.")
+                verdict = ("above the typical sale — the storey, size or timing you "
+                           "chose is working in this flat's favour.")
             else:
-                verdict = (f"That is **{abs(pct):.0f}% lower** than the typical "
-                           f"{flat_type.lower()} flat in {town.title()} "
-                           f"(**${median:,}**) — usually a lower floor, a smaller "
-                           "unit, or an earlier sale date.")
-            st.write(verdict)
+                verdict = ("below the typical sale — usually a smaller unit, a lower "
+                           "floor, or an earlier sale date.")
+            st.write(f"This flat is **{verdict}**")
 
-        # ------------------------------------------------- price history chart
-        # Kept because "what has this been worth over time" is the one question
-        # people ask without prompting, and the answer needs no explanation.
-        st.subheader("What this flat would have cost over the years", anchor=False)
-
-        months = sorted({*range(0, MAX_MONTH + 1, 3), months_since_2017, MAX_MONTH})
-        history = pd.DataFrame({
-            "date": [pd.Timestamp(2017, 1, 1) + pd.DateOffset(months=m) for m in months],
-            "price": predict([base_row(months_since_2017=m) for m in months]),
-        })
-        marker = history[history["date"] == pd.Timestamp(2017, 1, 1)
-                         + pd.DateOffset(months=months_since_2017)]
-
-        y = alt.Y("price:Q", title="Price",
-                  axis=alt.Axis(format="$,.0f", titlePadding=10),
-                  scale=alt.Scale(zero=False))
-        x = alt.X("date:T", title="Year", axis=alt.Axis(titlePadding=10, format="%Y"))
-
-        line = alt.Chart(history).mark_line(color=SERIES, strokeWidth=2.5).encode(
-            x=x, y=y,
-            tooltip=[alt.Tooltip("date:T", title="Month", format="%b %Y"),
-                     alt.Tooltip("price:Q", title="Price", format="$,.0f")],
+        # ---------------------------------------------------------- what-ifs
+        # Answered with numbers rather than charts. A row like "three floors
+        # higher: +$6,300" needs no axis-reading and is directly actionable.
+        step(4, "What is driving this price?")
+        st.write(
+            "Each row re-asks the model the same question with **one** detail "
+            "changed and everything else held exactly as you entered it."
         )
-        # The user's own flat, marked and named directly on the chart so it is
-        # never identified by colour alone.
-        dot = alt.Chart(marker).mark_point(
-            color=HIGHLIGHT, fill=HIGHLIGHT, size=170, stroke="white", strokeWidth=2,
-        ).encode(x=x, y=y)
-        label = alt.Chart(marker).mark_text(
-            text="Your flat", color=HIGHLIGHT, dy=-16, fontSize=12,
-            fontWeight="bold", font=CHART_FONT,
-        ).encode(x=x, y=y)
 
-        st.altair_chart(
-            (line + dot + label).properties(height=260)
-            .configure_view(strokeWidth=0)
-            .configure_axis(
-                grid=True, gridColor=GRID, gridOpacity=0.9,
-                domainColor=GRID, tickColor=GRID,
-                labelColor=INK_MUTED, titleColor=INK_MUTED,
-                labelFont=CHART_FONT, titleFont=CHART_FONT,
-                labelFontSize=11, titleFontSize=11, titleFontWeight=600,
-            ),
-            width="stretch",
+        bands = list(STOREY_BANDS)
+        band_index = bands.index(storey_band)
+        scenarios = []
+
+        # Storey: one band up, one band down, where those bands exist.
+        if band_index + 1 < len(bands):
+            scenarios.append((f"Three floors higher (storey {bands[band_index + 1]})",
+                              {"storey_mid": STOREY_BANDS[bands[band_index + 1]]}))
+        if band_index > 0:
+            scenarios.append((f"Three floors lower (storey {bands[band_index - 1]})",
+                              {"storey_mid": STOREY_BANDS[bands[band_index - 1]]}))
+
+        # Floor area: 10 sqm either way, but only within this flat type's range.
+        if floor_area_sqm + 10 <= area_max:
+            scenarios.append((f"10 sqm larger ({floor_area_sqm + 10:.0f} sqm)",
+                              {"floor_area_sqm": floor_area_sqm + 10}))
+        if floor_area_sqm - 10 >= area_min:
+            scenarios.append((f"10 sqm smaller ({floor_area_sqm - 10:.0f} sqm)",
+                              {"floor_area_sqm": floor_area_sqm - 10}))
+
+        # Timing: the same flat sold earlier, where that date is still inside
+        # the period the model learned from.
+        for years, back in ((1, 12), (5, 60)):
+            if months_since_2017 - back >= 0:
+                scenarios.append(
+                    (f"Sold {years} year{'s' if years > 1 else ''} earlier "
+                     f"({month_label(months_since_2017 - back)})",
+                     {"months_since_2017": months_since_2017 - back}))
+
+        # One batched call rather than one per scenario.
+        alt_prices = predict([base_row(**changes) for _, changes in scenarios])
+        st.dataframe(
+            pd.DataFrame({
+                "If the flat were…": [label for label, _ in scenarios],
+                "Estimated price": [f"${p:,.0f}" for p in alt_prices],
+                "Difference": [f"{p - price:+,.0f}" for p in alt_prices],
+            }),
+            hide_index=True, width="stretch",
         )
         st.caption(
-            "The same flat, priced at every point since 2017. Hover any point to "
-            "see the figure. The line stops at Jul 2026 — the most recent sales "
-            "available, so the tool cannot predict beyond it."
+            "Keep the flat exactly as entered, change only the one thing in a "
+            "row, and the price moves by the amount shown. Floor area and sale "
+            "timing move it most — together they account for around 86% of the "
+            "model's decision."
         )
 
-        # ------------------------------------------------------------ details
-        with st.expander("How accurate is this?", icon=":material/help:"):
-            st.markdown(
-                f"""
-This estimate is typically within **${TEST_MAE:,}** of the real selling price.
-That was measured on **{N_TEST:,} real sales** the model had never seen while
-learning — about **3.4%** of a typical \\$520,000 flat.
-
-**It works best for** ordinary flats: a 4- or 5-room unit on a normal floor,
-sold recently. Most sales look like this.
-
-**Treat it with more caution for** 2-room or Executive flats (far fewer sales to
-learn from), or anything shown with a warning above.
-
-**It cannot know** how renovated your flat is, which way it faces, or how close
-it is to an MRT entrance — none of that is in the public data.
-
-**It is not a valuation.** HDB requires a licensed valuer for an actual sale.
-                """
-            )
-
-        with st.expander("What you told us", icon=":material/list_alt:"):
+        # ---------------------------------------------------------- details
+        with st.expander("The details you entered", icon=":material/list_alt:"):
             st.dataframe(
                 pd.DataFrame({
-                    "Detail": ["Town", "Street", "Flat size", "Flat model",
-                               "Floor area", "Floor", "Lease remaining", "Sale month"],
-                    "Your answer": [town.title(), street_name.title(), flat_type,
-                                    flat_model, f"{floor_area_sqm:.0f} sqm",
-                                    f"Floors {storey_band}",
-                                    f"{remaining_lease_years:.0f} years", sale_label],
+                    "Detail": ["Town", "Street", "Flat type", "Flat model",
+                               "Floor area", "Space per room", "Storey",
+                               "Remaining lease", "Sale month"],
+                    "Value": [town.title(), street_name.title(), flat_type,
+                              flat_model, f"{floor_area_sqm:.0f} sqm",
+                              f"{floor_area_sqm / ROOMS[flat_type]:.1f} sqm",
+                              f"Floors {storey_band}",
+                              f"{remaining_lease_years:.1f} years", sale_label],
                 }),
                 hide_index=True, width="stretch",
             )
 
+        with st.expander("What this estimate assumes, and when to distrust it",
+                         icon=":material/warning:"):
+            st.markdown(
+                f"""
+**How the model decides.** Floor area and sale month together account for around
+86% of its decision-making. Street, storey, remaining lease, flat type and flat
+model make up the rest.
+
+**What it assumes**
+- Your flat is **typical for its street** — the model has never seen this
+  specific unit, only the {N_TRANSACTIONS:,} sales around it. A renovated flat,
+  a corner unit or one facing a rubbish chute will differ.
+- The band midpoint stands in for your exact floor, since HDB only publishes
+  `{storey_band}` rather than the unit number.
+- Market conditions resemble those in the data. The model learned from
+  Jan 2017 to {month_label(MAX_MONTH)} and **cannot forecast past that**; asking
+  for a later date returns the {month_label(MAX_MONTH)} answer.
+
+**When to trust it less**
+- Rare combinations — a 2 ROOM flat, or an EXECUTIVE, where there were far fewer
+  sales to learn from.
+- Anything flagged with a warning above.
+- Flats with unusual features the dataset does not record at all: renovation
+  standard, exact facing, or proximity to an MRT entrance.
+
+**What it is for.** Setting a realistic asking price, or sanity-checking a
+listing before you view it. It is **not** a valuation — HDB requires a licensed
+valuer for an actual transaction.
+                """
+            )
+
 else:
     st.markdown(
-        '<div class="awaiting">Answer the questions above, then press '
+        '<div class="awaiting">Set the flat\'s details above, then press '
         '<b>Estimate price</b>.</div>',
         unsafe_allow_html=True,
     )
 
-
-# ===================================================================
-# SIDEBAR - background detail, collapsed by default
-# ===================================================================
-with st.sidebar:
-    st.subheader("About", anchor=False)
-    st.write(
-        "Prices are predicted by a **Gradient Boosting** machine learning model "
-        f"trained on **{N_TRANSACTIONS:,} real HDB resale transactions** in "
-        "Punggol, Sengkang and Hougang since 2017."
-    )
-    c1, c2 = st.columns(2)
-    c1.metric("Typical error", f"${TEST_MAE:,}", border=True)
-    c2.metric("R squared", f"{TEST_R2:.3f}", border=True)
-    st.caption(
-        f"Measured on {N_TEST:,} held-out sales. R squared is the share of the "
-        "price difference between flats that the model explains."
-    )
-    st.markdown(
-        "**Covers:** Punggol, Sengkang, Hougang  \n"
-        f"**Sales up to:** {month_label(MAX_MONTH)}  \n"
-        "**Source:** data.gov.sg — HDB Resale Flat Prices"
-    )
-
 st.divider()
 st.caption(
-    "Estimates come from a machine learning model trained on past sales and are "
-    "indicative only. They are not a valuation and should not be the sole basis "
-    "for a buying or selling decision."
+    "Estimates are generated by a machine learning model from historical resale "
+    "transactions and are indicative only. They are not a valuation and should "
+    "not be the sole basis for a buying or selling decision."
 )
